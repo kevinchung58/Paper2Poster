@@ -27,7 +27,7 @@ class RoleType(Enum):
 
 
 class ModelType(UnifiedModelType, Enum):
-    DEFAULT = os.getenv("DEFAULT_MODEL_TYPE", "gpt-4o-mini")
+    DEFAULT = os.getenv("DEFAULT_MODEL_TYPE", "google/gemini-2.0-flash-001")
 
     GPT_3_5_TURBO = "gpt-3.5-turbo"
     GPT_4 = "gpt-4"
@@ -810,7 +810,7 @@ class OpenAPIName(Enum):
 
 
 class ModelPlatformType(Enum):
-    DEFAULT = os.getenv("DEFAULT_MODEL_PLATFORM_TYPE", "openai")
+    DEFAULT = os.getenv("DEFAULT_MODEL_PLATFORM_TYPE", "deepinfra")
 
     OPENAI = "openai"
     AZURE = "azure"
