@@ -45,7 +45,7 @@ class DbSection(Base):
     # SQLite handles JSON type if SQLAlchemy is recent enough and underlying SQLite supports it.
     # Otherwise, Text can be used with manual json.dumps/loads.
     # JSON type is more flexible for querying if the DB supports it directly.
-    section_images_json = Column(JSON, nullable=True, default=lambda: []) # Default to empty list
+    image_urls = Column(JSON, nullable=True) # Standardized name, default will be handled by Pydantic/CRUD
 
     poster = relationship("DbPoster", back_populates="sections")
 

@@ -19,56 +19,62 @@ export interface PosterElementStyles {
 
 // --- Request/Response Interfaces (matching backend Pydantic models) ---
 
-export interface PosterSection {
+export interface PosterSection { // Represents a section's data, used in PosterData and for updates
   section_id: string;
   section_title: string;
   section_content: string;
-  section_images: string[];
+  image_urls: string[]; // Standardized name
 }
 
 export interface PosterData {
+  poster_id: string; // Added poster_id here as it's part of the core Poster data from backend
   title: string;
-  abstract?: string;
+  abstract?: string | null;
   sections: PosterSection[];
-  conclusion?: string;
+  conclusion?: string | null;
   theme: string;
   selected_theme: string;
   style_overrides?: PosterElementStyles | null;
-  preview_status: "pending" | "generating" | "completed" | "failed"; // Added
-  preview_last_error?: string | null; // Added
+  preview_status: "pending" | "generating" | "completed" | "failed";
+  preview_last_error?: string | null;
+  last_modified: string; // Added last_modified from backend Poster schema
+  pptx_file_path?: string | null; // Added from backend Poster schema
+  preview_image_path?: string | null; // Added from backend Poster schema
 }
 
-export interface CreatePosterRequest {
+export interface CreatePosterRequest { // For initial POST /posters
   topic?: string;
   template_id?: string;
 }
 
-export interface CreatePosterResponse {
+export interface CreatePosterResponse { // Response from POST /posters
   poster_id: string;
-  poster_data: PosterData; // Should include selected_theme and style_overrides
+  poster_data: PosterData;
   preview_image_url: string;
 }
 
-export interface PosterState { // Represents full state if fetched, similar to PosterData
-  poster_id: string;
-  poster_data: PosterData;
-  last_modified: string;
-  pptx_file_path?: string;
-  preview_image_path?: string;
-}
+// This was for GET /posters/{poster_id} which returns a Poster Pydantic model
+// which is essentially PosterData.
+export type GetPosterStateResponse = PosterData;
 
-// Updated to match backend's OriginalLLMPromptRequest Pydantic schema
+
+// Updated to match backend's OriginalLLMPromptRequest Pydantic schema,
+// and to allow sending 'sections' for direct updates.
 export interface LLMPromptRequest {
-  prompt_text?: string; // Now optional
+  prompt_text?: string;
   target_element_id?: string;
   selected_theme?: string;
   style_overrides?: PosterElementStyles | null;
+  is_direct_update?: boolean;
+  sections?: PosterSection[]; // For sending updated sections list during direct updates
+  // Other specific fields from PosterUpdate could be added if needed for direct updates,
+  // e.g. title?: string, abstract?: string etc. if not using target_element_id for them.
 }
 
-export interface LLMPromptResponse {
+export interface LLMPromptResponse { // Response from POST /prompt
   poster_id: string;
   llm_response_text: string;
-  updated_poster_data: PosterData; // Should include selected_theme and style_overrides
+  updated_poster_data: PosterData;
   preview_image_url: string;
 }
 
@@ -90,10 +96,9 @@ export const createPosterSession = async (topic?: string): Promise<CreatePosterR
   return response.data;
 };
 
-export const getPosterState = async (posterId: string): Promise<PosterState> => {
-  // Note: PosterState might be too broad if only PosterData is needed by most of UI.
-  // For now, assuming it's okay. This endpoint returns the DB representation.
-  const response = await axios.get<PosterState>(`${API_V1_URL_CONFIG}/posters/${posterId}`);
+// Fetches the full Poster data object
+export const getPosterState = async (posterId: string): Promise<GetPosterStateResponse> => {
+  const response = await axios.get<GetPosterStateResponse>(`${API_V1_URL_CONFIG}/posters/${posterId}`);
   return response.data;
 };
 
@@ -103,7 +108,8 @@ export const sendLLMPrompt = async (
   targetElementId?: string,
   selectedTheme?: string,
   styleOverrides?: PosterElementStyles | null,
-  isDirectUpdate?: boolean // New optional parameter
+  isDirectUpdate?: boolean,
+  sectionsPayload?: PosterSection[] // For direct update of sections array
 ): Promise<LLMPromptResponse> => {
   const requestBody: LLMPromptRequest = {};
 
@@ -111,14 +117,8 @@ export const sendLLMPrompt = async (
   if (targetElementId !== undefined) requestBody.target_element_id = targetElementId;
   if (selectedTheme !== undefined) requestBody.selected_theme = selectedTheme;
   if (styleOverrides !== undefined) requestBody.style_overrides = styleOverrides;
-  if (isDirectUpdate !== undefined) requestBody.is_direct_update = isDirectUpdate; // Add to request
-
-  // Ensure at least one relevant field is present if API requires it.
-  // The backend /prompt endpoint can now handle theme-only or style-only updates.
-  // If all are undefined, requestBody will be {}.
-  // This is fine as backend /prompt can handle empty body if it means "no specific update, just get current state"
-  // or simply do nothing if no specific update fields are present.
-  // For our use (theme update, style update, prompt), at least one will be there.
+  if (isDirectUpdate !== undefined) requestBody.is_direct_update = isDirectUpdate;
+  if (sectionsPayload !== undefined) requestBody.sections = sectionsPayload; // Add sections if provided
 
   const response = await axios.post<LLMPromptResponse>(
     `${API_V1_URL_CONFIG}/posters/${posterId}/prompt`,

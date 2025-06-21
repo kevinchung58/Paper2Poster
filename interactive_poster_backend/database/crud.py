@@ -40,7 +40,7 @@ def create_poster(db: Session, poster_data: schemas.PosterCreate) -> models_db.D
                 poster_id=new_poster_id, # Link to the parent poster
                 section_title=section_data.section_title,
                 section_content=section_data.section_content,
-                section_images_json=section_data.section_images # Already a list from Pydantic
+                image_urls=section_data.image_urls # Use standardized 'image_urls'
             )
             db_poster.sections.append(db_section) # Appending to relationship handles adding to session if configured
             # db.add(db_section) # Not strictly necessary if cascade is working from poster append
@@ -75,7 +75,7 @@ def update_poster_data(db: Session, poster_id: str, poster_update: schemas.Poste
                         poster_id=db_poster.poster_id,
                         section_title=section_data.section_title,
                         section_content=section_data.section_content,
-                        section_images_json=section_data.section_images,
+                        image_urls=section_data.image_urls, # Use standardized 'image_urls'
                     )
                     db_poster.sections.append(new_section)
             # If value is None for sections (e.g. client sent "sections": null),
@@ -169,7 +169,8 @@ def update_poster_data(db: Session, poster_id: str, poster_update: schemas.Poste
                     db_section = models_db.DbSection(
                         section_id=uuid.uuid4().hex,
                         poster_id=db_poster.poster_id,
-                        **section_create_data.dict()
+                        **section_create_data.dict() # This should now correctly include 'image_urls'
+                                                     # if SectionCreate has it and DbSection init accepts it.
                     )
                     db_poster.sections.append(db_section)
             else: # Client explicitly sent "sections": null, so clear them

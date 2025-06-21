@@ -5,11 +5,11 @@ This backend service provides the API for the Interactive Poster Generator appli
 ## Features
 
 *   Manages poster sessions and state.
-*   **Persistent Storage:** Utilizes a local SQLite database (`posters.db`) to store all poster data, including titles, content, selected themes, and paths to generated files.
+    *   **Persistent Storage:** Utilizes a local SQLite database (`posters.db`) to store all poster data, including titles, content, selected themes, section image URLs, and paths to generated files.
 *   **Granular Style Customization:** Supports fine-grained style overrides (e.g., specific font sizes, colors for elements like titles, section text, background colors) which are stored as a JSON object (`style_overrides`) alongside the main poster data in the database. These overrides are layered on top of the selected base theme during PPTX generation.
 *   Integrates with CAMEL framework for LLM-based content generation.
-*   Generates PPTX files from poster data, applying selected themes and granular style overrides.
-*   Generates PNG image previews of posters using headless LibreOffice.
+    *   **PPTX Generation:** Creates PowerPoint files from poster data, applying selected themes, granular style overrides, and embedding images downloaded from URLs provided for each section.
+    *   Generates PNG image previews of posters using headless LibreOffice (live preview may not always render web images, but PPTX will attempt to embed them).
 *   Provides a RESTful API for frontend interaction.
 
 ## Setup and Running
@@ -79,5 +79,6 @@ The API provides endpoints for:
 *   Pydantic: Data validation.
 *   python-pptx: For generating PowerPoint files.
 *   SQLAlchemy: For Object-Relational Mapping (ORM) interaction with the SQLite database.
+*   requests: For downloading images from URLs during PPTX generation.
 *   CAMEL framework (and its dependencies for LLM interaction).
 *   (Implicit) LibreOffice for `soffice`.

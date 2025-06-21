@@ -2,10 +2,13 @@ import pptx
 from pptx.util import Inches, Pt
 from pptx.enum.shapes import MSO_SHAPE # Not used in current logic, but can be kept for future
 from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN # For text alignment
-import logging # For logging
+from pptx.enum.text import PP_ALIGN
+import logging
+import requests # For downloading images
+from io import BytesIO # To handle image data in memory
+# from pptx.util import Inches # Already imported
 
-from ..schemas import models as schemas # Explicitly alias to avoid confusion with local 'models' if any
+from ..schemas import models as schemas
 
 logger = logging.getLogger(__name__)
 
@@ -160,14 +163,79 @@ def generate_pptx_from_data(poster_data: schemas.Poster, output_path: str) -> No
         tf_body = body_placeholder.text_frame
         tf_body.clear()
         p_body = tf_body.add_paragraph()
-        p_body.text = section.section_content or "" # Ensure text is not None
-        apply_font_style(tf_body, "body", selected_theme, is_body=True)
+        p_body.text = section.section_content or ""
+        apply_font_style(tf_body, "body", selected_theme, style_overrides, is_body=True) # Role "body" for section content
 
-        # Placeholder for images - just a note for now
-        if section.section_images: # section_images is List[str] from Pydantic
-            notes_slide = slide.notes_slide
-            notes_text_frame = notes_slide.notes_text_frame
-            notes_text_frame.text = f"Note: This section originally contained {len(section.section_images)} image(s): {', '.join(section.section_images)}"
+        # Image Embedding Logic
+        if section.image_urls: # Now uses 'image_urls'
+            logger.info(f"Section '{section.section_title}' has {len(section.image_urls)} image URLs.")
+
+            # Basic layout: attempt to place first image. More complex layouts would need more logic.
+            # Assuming content body_placeholder is slide.placeholders[1].
+            # These are example coordinates and sizes, adjust based on typical slide master.
+            # Slide dimensions (approx for 16:9): width=10in, height=5.625in
+            # Try to place image to the right of text, or below.
+            # For simplicity, let's try a fixed position for the first image.
+            # If text placeholder takes up (Left:0.5, Top:1.5, Width:5, Height:3.5)
+            # Image could be (Left: 6, Top: 1.5, Width: 3.5, Height: 3.5)
+
+            img_left = Inches(6.0)
+            img_top = Inches(1.8) # Below section title
+            img_max_width = Inches(3.5)
+            img_max_height = Inches(3.0) # Max height for the image
+
+            image_added_count = 0
+            for img_url in section.image_urls:
+                if not img_url or not img_url.startswith(('http://', 'https://')):
+                    logger.warning(f"Invalid or non-HTTP/S URL for section '{section.section_title}': {img_url}")
+                    continue
+
+                if image_added_count >= 1: # Simple: only add the first valid image
+                    logger.info(f"Skipping additional images for section '{section.section_title}'.")
+                    break
+
+                try:
+                    logger.info(f"Downloading image from URL: {img_url}")
+                    response = requests.get(img_url, stream=True, timeout=10)
+                    response.raise_for_status()
+
+                    image_stream = BytesIO(response.content)
+
+                    try
+                        # Add picture, attempting to fit within width/height constraints
+                        pic = slide.shapes.add_picture(image_stream, img_left, img_top, width=img_max_width)
+
+                        # Scale to fit within max_height if it exceeds
+                        if pic.height > img_max_height:
+                            scale_ratio = img_max_height / pic.height
+                            pic.width = int(pic.width * scale_ratio)
+                            pic.height = img_max_height # Set to max height
+
+                        # Also ensure it doesn't overflow slide width (less likely if left+width is managed)
+                        if pic.left + pic.width > prs.slide_width:
+                             # This might happen if img_left + img_max_width is too large
+                             # Or if original image was very wide and scaling by height made it too wide
+                             new_width = prs.slide_width - pic.left - Inches(0.2) # Small margin
+                             if new_width > Inches(0.5): # Prevent tiny widths
+                                scale_ratio_w = new_width / pic.width
+                                pic.width = new_width
+                                pic.height = int(pic.height * scale_ratio_w)
+
+                        logger.info(f"Successfully added image from {img_url} to section '{section.section_title}'.")
+                        image_added_count += 1
+                    except Exception as e_add_pic:
+                        logger.error(f"Failed to add image from {img_url} to slide for section '{section.section_title}': {e_add_pic}")
+                    finally:
+                        image_stream.close()
+
+                except requests.exceptions.RequestException as e_req:
+                    logger.error(f"Failed to download image {img_url} for section '{section.section_title}': {e_req}")
+                except Exception as e_general:
+                    logger.error(f"An unexpected error occurred while processing image {img_url} for section '{section.section_title}': {e_general}")
+        elif section.image_urls is None or not section.image_urls: # Handle case where image_urls might be None
+            pass # No images to process
+        else: # Should not happen if section.image_urls is List[str] or None
+            logger.warning(f"Unexpected type for image_urls in section '{section.section_title}': {type(section.image_urls)}")
 
     # --- Conclusion Slide ---
     if poster_data.conclusion:
