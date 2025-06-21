@@ -135,3 +135,25 @@ export const triggerPPTXGenerationOnBackend = async (posterId: string): Promise<
 export const getPPTXDownloadUrl = (posterId: string): string => {
   return `${API_V1_URL_CONFIG}/posters/${posterId}/download_pptx`;
 };
+
+// For POST /posters/{poster_id}/sections/{section_id}/upload_image
+// The backend returns the full updated Poster (which is PosterData type on frontend)
+export const uploadSectionImage = async (
+  posterId: string,
+  sectionId: string,
+  file: File
+): Promise<PosterData> => {
+  const formData = new FormData();
+  formData.append("image_file", file); // "image_file" must match the backend File(...) parameter name
+
+  const response = await axios.post<PosterData>( // Expecting PosterData in response
+    `${API_V1_URL_CONFIG}/posters/${posterId}/sections/${sectionId}/upload_image`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return response.data;
+};

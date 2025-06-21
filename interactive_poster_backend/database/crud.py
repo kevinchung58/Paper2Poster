@@ -1,6 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func # For count
-from . import models_db # DB (SQLAlchemy) models
+import os
+import shutil
+from pathlib import Path
+import logging # For logging
+from .. import config # To access UPLOADED_IMAGES_DIR
+from . import models_db
 from ..schemas import models as schemas # Pydantic schemas
 import uuid
 from datetime import datetime, timezone
@@ -56,31 +61,59 @@ def update_poster_data(db: Session, poster_id: str, poster_update: schemas.Poste
     if not db_poster:
         return None
 
+    # Store original sections data for comparison and cleanup
+    original_sections_orm = list(db_poster.sections) # Make a copy before modification
+    original_sections_map = {s.section_id: s for s in original_sections_orm}
+
     # Iterate over fields that were explicitly set in the Pydantic model
-    # to handle partial updates correctly.
     for field in poster_update.__fields_set__:
         value = getattr(poster_update, field)
         if field == "sections":
-            if value is not None: # If sections are provided (even an empty list)
-                # Clear existing sections
-                for old_section in db_poster.sections:
-                    db.delete(old_section)
-                db_poster.sections.clear() # Ensure collection is empty before adding new
-                # db.flush() # Optional: process deletes before adds if there are constraints
+            new_sections_orm_list = []
+            new_section_ids_from_payload = set()
 
-                # Add new sections
-                for section_data in value: # value is List[SectionCreate]
-                    new_section = models_db.DbSection(
-                        section_id=uuid.uuid4().hex, # Generate new ID for these sections
+            if value is not None: # If sections are provided in payload (can be empty list)
+                for section_create_data in value: # value is List[schemas.SectionCreate]
+                    # This assumes SectionCreate does not have section_id, so all are new.
+                    # If updating existing sections by ID was intended, SectionCreate would need section_id
+                    # and we'd fetch existing or create new.
+                    # Given current frontend sends full list of sections including existing ones (as SectionCreate),
+                    # this effectively means replacing all sections.
+                    new_section_orm = models_db.DbSection(
+                        section_id=uuid.uuid4().hex,
                         poster_id=db_poster.poster_id,
-                        section_title=section_data.section_title,
-                        section_content=section_data.section_content,
-                        image_urls=section_data.image_urls, # Use standardized 'image_urls'
+                        section_title=section_create_data.section_title,
+                        section_content=section_create_data.section_content,
+                        image_urls=section_create_data.image_urls,
                     )
-                    db_poster.sections.append(new_section)
-            # If value is None for sections (e.g. client sent "sections": null),
-            # it means "clear all sections". The loop above handles this by making sections empty.
-            # If "sections" was not in the request, __fields_set__ won't include it, and sections remain untouched.
+                    new_sections_orm_list.append(new_section_orm)
+                    if hasattr(section_create_data, 'section_id') and section_create_data.section_id: # Should not happen with SectionCreate
+                         new_section_ids_from_payload.add(section_create_data.section_id)
+                    else: # For truly new sections, their generated ID won't be in old_section_ids_to_delete_dirs_for
+                         pass
+
+
+            # Cleanup: Delete files from sections that are removed or whose image_urls have changed
+            # This logic needs to be precise. If sections are entirely replaced (identified by new IDs),
+            # then all old section image directories should be removed.
+            # If a section is updated (same ID, but new image_urls list), then only diff of URLs should be deleted.
+            # Current logic with SectionCreate implies all sections are new, so all old ones are removed.
+
+            # Delete files and directories of all old sections because they are being replaced
+            for old_sec_orm in original_sections_orm:
+                if old_sec_orm.image_urls:
+                    for rel_path in old_sec_orm.image_urls:
+                        _delete_uploaded_image_file(rel_path)
+
+                old_section_dir = config.UPLOADED_IMAGES_DIR / f"poster_{poster_id}" / f"section_{old_sec_orm.section_id}"
+                if old_section_dir.exists() and old_section_dir.is_dir():
+                    try:
+                        shutil.rmtree(old_section_dir)
+                        logger.info(f"Deleted section image directory (due to section replacement): {old_section_dir}")
+                    except Exception as e:
+                        logger.error(f"Error deleting section image directory {old_section_dir}: {e}", exc_info=True)
+
+            db_poster.sections = new_sections_orm_list # Assign the new list of ORM sections
 
         elif field == "style_overrides":
             if value is None: # Client explicitly sent "style_overrides": null
@@ -214,12 +247,45 @@ def update_poster_filepaths(db: Session, poster_id: str, pptx_path: str | None, 
     return db_poster
 
 def delete_poster(db: Session, poster_id: str) -> models_db.DbPoster | None:
-    """Delete a poster and its associated sections (due to cascade)."""
+    """Delete a poster, its associated sections (due to cascade), and its uploaded image files/directories."""
     db_poster = get_poster(db, poster_id)
     if db_poster:
+        logger.info(f"Deleting poster {poster_id} and its associated uploaded images.")
+        # Delete images and section directories
+        for section in db_poster.sections: # These are DbSection ORM objects
+            if section.image_urls: # This is a list of relative paths
+                for rel_path in section.image_urls:
+                    _delete_uploaded_image_file(rel_path)
+            # Delete the specific section's image directory
+            # Relative path for section dir: poster_{poster_id}/section_{section.section_id}
+            # This needs to be constructed carefully. The rel_path above already contains this structure.
+            # So, deleting individual files is primary. Deleting the directory structure is next.
+
+            # Construct section directory path based on how relative_file_path_to_store was made in upload endpoint
+            # relative_file_path_to_store = Path(config.UPLOADED_IMAGES_DIR_NAME) / f"poster_{poster_id}" / f"section_{section_id}" / unique_filename
+            # So, the directory for a section is config.UPLOADED_IMAGES_DIR / f"poster_{poster_id}" / f"section_{section.section_id}"
+            section_dir = config.UPLOADED_IMAGES_DIR / f"poster_{poster_id}" / f"section_{section.section_id}"
+            if section_dir.exists() and section_dir.is_dir():
+                try:
+                    shutil.rmtree(section_dir)
+                    logger.info(f"Deleted section image directory: {section_dir}")
+                except Exception as e:
+                    logger.error(f"Error deleting section image directory {section_dir}: {e}", exc_info=True)
+
+        # Delete the poster's main image directory (e.g., uploaded_images/poster_{poster_id})
+        # This will remove any other files directly under it, and the poster_id folder itself.
+        poster_image_dir = config.UPLOADED_IMAGES_DIR / f"poster_{poster_id}"
+        if poster_image_dir.exists() and poster_image_dir.is_dir():
+            try:
+                shutil.rmtree(poster_image_dir)
+                logger.info(f"Deleted poster image directory: {poster_image_dir}")
+            except Exception as e:
+                logger.error(f"Error deleting poster image directory {poster_image_dir}: {e}", exc_info=True)
+
+        # Now delete the poster from DB (cascades to DbSection rows)
         db.delete(db_poster)
         db.commit()
-        return db_poster
+        return db_poster # Return the deleted object (now detached from session)
     return None
 
 
@@ -271,6 +337,41 @@ def update_section_content(db: Session, section_id: str, content: str) -> models
         db.refresh(db_section)
         return db_section
     return None
+
+logger = logging.getLogger(__name__)
+
+def _delete_uploaded_image_file(relative_path: str): # Removed logger arg, use module logger
+    if not relative_path or relative_path.startswith(('http://', 'https://')):
+        # logger.debug(f"Skipping deletion for non-local or empty path: {relative_path}")
+        return
+
+    # Ensure relative_path does not try to escape the intended base directory
+    # by resolving it against a known root and checking if it's still within that root.
+    # config.UPLOADED_IMAGES_DIR is absolute. relative_path is like "poster_X/section_Y/file.png".
+    # So, full_path should be config.UPLOADED_IMAGES_DIR / relative_path.
+
+    # Check for ".." components to prevent path traversal, although Path object should handle this somewhat.
+    if ".." in Path(relative_path).parts:
+        logger.warning(f"Skipping deletion for potentially unsafe path: {relative_path}")
+        return
+
+    full_path = config.UPLOADED_IMAGES_DIR / relative_path
+    try:
+        # Resolve to prevent symbolic link traversal issues if any, though less common here.
+        resolved_path = full_path.resolve()
+        # Ensure the resolved path is still within the UPLOADED_IMAGES_DIR
+        if config.UPLOADED_IMAGES_DIR.resolve() not in resolved_path.parents:
+            logger.warning(f"Skipping deletion for path outside designated upload dir: {resolved_path}")
+            return
+
+        if resolved_path.is_file():
+            resolved_path.unlink()
+            logger.info(f"Deleted uploaded image file: {resolved_path}")
+        # else:
+            # logger.info(f"Uploaded image file not found for deletion (already deleted or invalid path): {resolved_path}")
+    except Exception as e:
+        logger.error(f"Error deleting uploaded image file {full_path}: {e}", exc_info=True)
+
 
 # Helper for converting Pydantic Poster to DbPoster, not typically used directly in CRUD like this
 # but shows mapping. CRUD functions take Pydantic models as input for create/update.

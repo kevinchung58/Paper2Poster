@@ -4,9 +4,10 @@ from pptx.enum.shapes import MSO_SHAPE # Not used in current logic, but can be k
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 import logging
-import requests # For downloading images
-from io import BytesIO # To handle image data in memory
-# from pptx.util import Inches # Already imported
+import requests
+from io import BytesIO
+from pathlib import Path # Ensure Path is imported
+from .. import config # Ensure config is imported
 
 from ..schemas import models as schemas
 
@@ -170,72 +171,75 @@ def generate_pptx_from_data(poster_data: schemas.Poster, output_path: str) -> No
         if section.image_urls: # Now uses 'image_urls'
             logger.info(f"Section '{section.section_title}' has {len(section.image_urls)} image URLs.")
 
-            # Basic layout: attempt to place first image. More complex layouts would need more logic.
-            # Assuming content body_placeholder is slide.placeholders[1].
             # These are example coordinates and sizes, adjust based on typical slide master.
-            # Slide dimensions (approx for 16:9): width=10in, height=5.625in
-            # Try to place image to the right of text, or below.
-            # For simplicity, let's try a fixed position for the first image.
-            # If text placeholder takes up (Left:0.5, Top:1.5, Width:5, Height:3.5)
-            # Image could be (Left: 6, Top: 1.5, Width: 3.5, Height: 3.5)
-
-            img_left = Inches(6.0)
-            img_top = Inches(1.8) # Below section title
-            img_max_width = Inches(3.5)
-            img_max_height = Inches(3.0) # Max height for the image
+            img_left = Inches(5.5) # Example: Right half of a 10-inch wide slide
+            img_top = Inches(1.8)  # Example: Below title, allowing space for text on left
+            img_max_width = Inches(4.0)
+            img_max_height = Inches(3.5)
 
             image_added_count = 0
-            for img_url in section.image_urls:
-                if not img_url or not img_url.startswith(('http://', 'https://')):
-                    logger.warning(f"Invalid or non-HTTP/S URL for section '{section.section_title}': {img_url}")
-                    continue
-
-                if image_added_count >= 1: # Simple: only add the first valid image
-                    logger.info(f"Skipping additional images for section '{section.section_title}'.")
+            for img_path_or_url in section.image_urls:
+                if image_added_count >= 1: # Still only adding the first successfully processed image
+                    logger.info(f"Processed first image for section '{section.section_title}'. Skipping further images.")
                     break
 
-                try:
-                    logger.info(f"Downloading image from URL: {img_url}")
-                    response = requests.get(img_url, stream=True, timeout=10)
-                    response.raise_for_status()
+                image_source_for_pptx: Union[BytesIO, Path, str]
+                is_local_file_from_upload = False # Flag to manage BytesIO closing
 
-                    image_stream = BytesIO(response.content)
-
+                if img_path_or_url.startswith(('http://', 'https://')):
                     try
-                        # Add picture, attempting to fit within width/height constraints
-                        pic = slide.shapes.add_picture(image_stream, img_left, img_top, width=img_max_width)
+                        logger.info(f"Downloading image from URL: {img_path_or_url}")
+                        response = requests.get(img_path_or_url, stream=True, timeout=10)
+                        response.raise_for_status()
+                        image_source_for_pptx = BytesIO(response.content)
+                        logger.info(f"Successfully downloaded image from {img_path_or_url}.")
+                    except requests.exceptions.RequestException as e_req:
+                        logger.error(f"Failed to download image {img_path_or_url} for section '{section.section_title}': {e_req}")
+                        continue
+                    except Exception as e_general_web:
+                        logger.error(f"An unexpected error occurred with web image {img_path_or_url} for section '{section.section_title}': {e_general_web}")
+                        continue
+                elif img_path_or_url: # Assuming it's a relative local path
+                    # Relative path is like "poster_{pid}/section_{sid}/filename.ext"
+                    # It's relative to config.UPLOADED_IMAGES_DIR_NAME, which is a subdirectory of APP_ROOT_DIR
+                    # config.UPLOADED_IMAGES_DIR gives the absolute path to "uploaded_images"
+                    absolute_image_path = config.UPLOADED_IMAGES_DIR / img_path_or_url
 
-                        # Scale to fit within max_height if it exceeds
-                        if pic.height > img_max_height:
-                            scale_ratio = img_max_height / pic.height
-                            pic.width = int(pic.width * scale_ratio)
-                            pic.height = img_max_height # Set to max height
+                    if not absolute_image_path.is_file():
+                        logger.error(f"Local image file not found at resolved path: {absolute_image_path} (original relative: {img_path_or_url})")
+                        continue
+                    image_source_for_pptx = str(absolute_image_path) # add_picture can take a path string
+                    is_local_file_from_upload = True
+                    logger.info(f"Found local image file: {absolute_image_path}")
+                else: # Empty or None URL
+                    logger.warning(f"Empty or invalid image path/URL for section '{section.section_title}'.")
+                    continue
 
-                        # Also ensure it doesn't overflow slide width (less likely if left+width is managed)
-                        if pic.left + pic.width > prs.slide_width:
-                             # This might happen if img_left + img_max_width is too large
-                             # Or if original image was very wide and scaling by height made it too wide
-                             new_width = prs.slide_width - pic.left - Inches(0.2) # Small margin
-                             if new_width > Inches(0.5): # Prevent tiny widths
-                                scale_ratio_w = new_width / pic.width
-                                pic.width = new_width
-                                pic.height = int(pic.height * scale_ratio_w)
+                # Common logic for adding picture to slide
+                try:
+                    pic = slide.shapes.add_picture(image_source_for_pptx, img_left, img_top, width=img_max_width)
 
-                        logger.info(f"Successfully added image from {img_url} to section '{section.section_title}'.")
-                        image_added_count += 1
-                    except Exception as e_add_pic:
-                        logger.error(f"Failed to add image from {img_url} to slide for section '{section.section_title}': {e_add_pic}")
-                    finally:
-                        image_stream.close()
+                    if pic.height > img_max_height:
+                        scale_ratio = img_max_height / pic.height
+                        pic.width = int(pic.width * scale_ratio)
+                        pic.height = img_max_height
 
-                except requests.exceptions.RequestException as e_req:
-                    logger.error(f"Failed to download image {img_url} for section '{section.section_title}': {e_req}")
-                except Exception as e_general:
-                    logger.error(f"An unexpected error occurred while processing image {img_url} for section '{section.section_title}': {e_general}")
-        elif section.image_urls is None or not section.image_urls: # Handle case where image_urls might be None
+                    # Optional: Further check for slide width overflow if necessary
+                    # if pic.left + pic.width > prs.slide_width: ...
+
+                    logger.info(f"Successfully added image '{img_path_or_url}' to section '{section.section_title}'.")
+                    image_added_count += 1
+                except FileNotFoundError as e_fnf:
+                     logger.error(f"Local image file not found by python-pptx at: {image_source_for_pptx}. Error: {e_fnf}")
+                except Exception as e_add_pic:
+                    logger.error(f"Failed to add image '{img_path_or_url}' to slide for section '{section.section_title}': {e_add_pic}", exc_info=True)
+                finally:
+                    if not is_local_file_from_upload and isinstance(image_source_for_pptx, BytesIO):
+                        image_source_for_pptx.close() # Close BytesIO stream for downloaded images
+
+        elif section.image_urls is None: # Explicitly None
             pass # No images to process
-        else: # Should not happen if section.image_urls is List[str] or None
-            logger.warning(f"Unexpected type for image_urls in section '{section.section_title}': {type(section.image_urls)}")
+        # else: [] (empty list) is handled by 'if section.image_urls:' failing
 
     # --- Conclusion Slide ---
     if poster_data.conclusion:

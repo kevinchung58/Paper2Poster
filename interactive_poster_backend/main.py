@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import config
 from .routers import poster_router
 from .utils import cleanup
-from .database import database_setup # Import database setup
+from .database import database_setup
 import logging
+import os # Added for os.makedirs
 
 # Configure logging for main application
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -24,7 +25,14 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     logger.info("Application startup: Ensuring temporary directories exist...")
-    config.create_temp_dirs()
+    config.create_temp_dirs() # Creates temp_posters and temp_previews
+
+    # Ensure uploaded images directory exists
+    try:
+        os.makedirs(config.UPLOADED_IMAGES_DIR, exist_ok=True)
+        logger.info(f"Ensured uploaded images directory exists: {config.UPLOADED_IMAGES_DIR}")
+    except Exception as e:
+        logger.error(f"Could not create uploaded images directory {config.UPLOADED_IMAGES_DIR}: {e}", exc_info=True)
 
     logger.info("Application startup: Initializing database and creating tables...")
     try:
@@ -32,13 +40,14 @@ async def startup_event():
         logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error during database setup: {e}", exc_info=True)
-        # Depending on the severity, you might want to exit the app if DB setup fails
-        # For now, just logging the error.
 
     logger.info("Application startup: Performing initial cleanup of temporary files...")
     try:
         cleanup.cleanup_old_files(config.TEMP_POSTERS_DIR, config.DAYS_TO_KEEP_TEMP_FILES)
         cleanup.cleanup_old_files(config.TEMP_PREVIEWS_DIR, config.DAYS_TO_KEEP_TEMP_FILES)
+        # Not cleaning up UPLOADED_IMAGES_DIR with the same date-based policy yet,
+        # as their lifecycle might be different (e.g., keep as long as referenced by a poster).
+        # A more sophisticated cleanup for uploaded_images would be needed if it grows indefinitely.
         logger.info("Temporary file cleanup finished successfully.")
     except Exception as e:
         logger.error(f"Error during startup cleanup: {e}", exc_info=True)

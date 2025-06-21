@@ -29,7 +29,8 @@ interface AppContextType extends AppState {
   setCurrentTargetElementId: (targetId: string | null) => void;
   updateStyleOverrides: (newOverrides: PosterElementStyles) => Promise<void>;
   directUpdateElement: (targetId: string, newContent: string) => Promise<void>;
-  updateSectionImageUrls: (sectionId: string, newImageUrls: string[]) => Promise<void>; // New action
+  updateSectionImageUrls: (sectionId: string, newImageUrls: string[]) => Promise<void>;
+  uploadImageForSection: (sectionId: string, file: File) => Promise<void>; // New action
 }
 
 const initialState: AppState = {
@@ -242,6 +243,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const uploadImageForSection = async (sectionId: string, file: File) => {
+    if (!state.posterId) {
+      dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: 'Error: No active poster to upload image for.', type: 'error' } });
+      return;
+    }
+
+    dispatch({ type: 'OPERATION_START', operationType: 'uploadImage' });
+    const tempSystemMessage = `Uploading image '${file.name}' for section...`;
+    dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: tempSystemMessage, type: 'info' } });
+
+    try {
+      const updatedPosterDataFromUpload = await api.uploadSectionImage(state.posterId, sectionId, file);
+
+      // Backend returns the full updated Poster object.
+      // The backend endpoint already sets preview_status to "pending".
+      dispatch({
+        type: 'UPDATE_POSTER_SUCCESS',
+        payload: {
+          updatedPosterData: updatedPosterDataFromUpload,
+          previewImageUrl: updatedPosterDataFromUpload.preview_image_url, // This will be from the updated poster data
+          systemMessageText: `Image '${file.name}' uploaded for section. Preview is updating.`
+        }
+      });
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to upload image.';
+      dispatch({ type: 'OPERATION_FAILURE', payload: errorMessage });
+      dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error uploading '${file.name}': ${errorMessage}`, type: 'error' } });
+    }
+  };
+
   const setCurrentTargetElementId = (targetId: string | null) => {
     dispatch({ type: 'SET_TARGET_ELEMENT_ID', payload: targetId });
   };
@@ -249,7 +280,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const generateAndDownloadPPTX = async () => { /* ... existing code ... */ }; // Shortened for brevity
 
   return (
-    <AppContext.Provider value={{ ...state, startNewPoster, sendChatMessage, generateAndDownloadPPTX, updatePosterTheme, setCurrentTargetElementId, updateStyleOverrides, directUpdateElement, updateSectionImageUrls }}>
+    <AppContext.Provider value={{ ...state, startNewPoster, sendChatMessage, generateAndDownloadPPTX, updatePosterTheme, setCurrentTargetElementId, updateStyleOverrides, directUpdateElement, updateSectionImageUrls, uploadImageForSection }}>
       {children}
     </AppContext.Provider>
   );

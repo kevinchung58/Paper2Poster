@@ -3,7 +3,7 @@ import { useAppContext } from '../context/AppContext';
 // PosterData type from context will include image_urls in its sections
 
 const EditableTextView = () => {
-  const { posterData, isLoading, directUpdateElement, updateSectionImageUrls } = useAppContext(); // Added updateSectionImageUrls
+  const { posterData, isLoading, directUpdateElement, updateSectionImageUrls, uploadImageForSection } = useAppContext(); // Added uploadImageForSection
 
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
@@ -189,6 +189,47 @@ const EditableTextView = () => {
                     }}
                       disabled={isLoading}
                       className="px-3 py-1 bg-green-500 text-white text-xs rounded-r hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 disabled:bg-green-300"
+                    >
+                      Add URL
+                    </button>
+                  </div>
+
+                  {/* File Upload Input and Button */}
+                  <div className="flex flex-col sm:flex-row items-center mt-2 space-y-2 sm:space-y-0 sm:space-x-2">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif" // Standard comma-separated, no space needed
+                      id={`upload-file-input-${section.section_id}`}
+                      disabled={isLoading}
+                      className="text-xs p-1 border border-gray-300 rounded w-full focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
+                    />
+                    <button
+                      onClick={async () => { // Make async
+                        const fileInputElement = document.getElementById(`upload-file-input-${section.section_id}`) as HTMLInputElement;
+                        if (fileInputElement && fileInputElement.files && fileInputElement.files.length > 0) {
+                          const file = fileInputElement.files[0];
+
+                          // Frontend validation (optional, but good UX)
+                          const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif'];
+                          const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+                          if (!allowedExtensions.includes(fileExtension)) {
+                            alert(`Invalid file type. Allowed: ${allowedExtensions.join(', ')}`);
+                            fileInputElement.value = ""; return;
+                          }
+                          const maxSizeMB = 5; // Should ideally come from a shared constant if also defined in backend config
+                          if (file.size > maxSizeMB * 1024 * 1024) {
+                            alert(`File is too large. Max size: ${maxSizeMB}MB.`);
+                            fileInputElement.value = ""; return;
+                          }
+
+                          await uploadImageForSection(section.section_id, file); // Call context action
+                          fileInputElement.value = ""; // Clear file input after initiating upload
+                        } else {
+                          alert("No file selected for upload.");
+                        }
+                      }}
+                      disabled={isLoading}
+                      className="px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 disabled:bg-purple-300 w-full sm:w-auto"
                   >
                     Add
                   </button>

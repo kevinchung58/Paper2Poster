@@ -27,6 +27,13 @@ SOFFICE_COMMAND = os.getenv("SOFFICE_COMMAND", "soffice")
 # --- Temporary File Cleanup Configuration ---
 DAYS_TO_KEEP_TEMP_FILES = 7 # Number of days to keep temporary files
 
+# --- Configuration for Uploaded Images ---
+UPLOADED_IMAGES_DIR_NAME = "uploaded_images" # Name of the directory
+UPLOADED_IMAGES_DIR = APP_ROOT_DIR / UPLOADED_IMAGES_DIR_NAME # Absolute path
+
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif"} # Set of allowed extensions
+MAX_IMAGE_UPLOAD_SIZE_MB = 5 # Max image upload size in Megabytes
+
 # Example of how to get a path for a file in temp_posters
 # def get_poster_pptx_path(poster_id: str) -> Path:
 #     return TEMP_POSTERS_DIR / f"{poster_id}.pptx"
