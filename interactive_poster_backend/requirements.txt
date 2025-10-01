@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-pptx
+SQLAlchemy>=2.0
+requests>=2.25.0
