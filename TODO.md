@@ -19,25 +19,21 @@ This document tracks the development tasks for the Interactive Poster Generator 
     -   [X] Address all `@typescript-eslint/no-explicit-any` errors by providing proper types.
     -   [X] Remove all unused variables (`@typescript-eslint/no-unused-vars`).
 
-## Phase 2: Solidification and DX (Developer Experience)
+## Phase 2: Solidification and DX (Developer Experience) (Completed)
 
--   **[ ] 1. Backend Unit Tests:**
-    -   [ ] Write comprehensive unit tests for the new `poster_service.py` to cover various update scenarios and ensure business logic is correct.
--   **[ ] 2. Harden System Dependencies:**
-    -   [ ] Replace hardcoded strings like `"poster_title"` with enums or constants.
-    -   [ ] Add a startup check to verify that the `soffice` command (LibreOffice) is available in the system's PATH.
--   **[ ] 3. Generate Static API Documentation:**
-    -   [ ] Create a script to generate a static `openapi.json` file from the running FastAPI application.
-    -   [ ] Commit the `openapi.json` to the repository to facilitate easier frontend development.
--   **[ ] 4. Frontend Testing Framework:**
-    -   [ ] Add a testing framework (e.g., Vitest) to the `interactive-poster-ui` project.
-    -   [ ] Write a simple component test to ensure the framework is set up correctly.
--   **[ ] 5. General Feature Enhancements:**
-    -   [ ] Implement more sophisticated error handling and user feedback on the frontend.
-    -   [ ] Add user authentication and authorization.
-    -   [ ] Enhance the style customization options.
+-   **[X] 1. Backend Unit Tests:**
+    -   [X] Write comprehensive unit tests for the new `poster_service.py` to cover various update scenarios and ensure business logic is correct.
+-   **[X] 2. Harden System Dependencies:**
+    -   [X] Replace hardcoded strings like `"poster_title"` with enums or constants.
+    -   [X] Add a startup check to verify that the `soffice` command (LibreOffice) is available in the system's PATH.
+-   **[X] 3. Generate Static API Documentation:**
+    -   [X] Create a script to generate a static `openapi.json` file from the running FastAPI application.
+    -   [X] Commit the `openapi.json` to the repository to facilitate easier frontend development.
+-   **[X] 4. Frontend Testing Framework:**
+    -   [X] Add a testing framework (Vitest) to the `interactive-poster-ui` project.
+    -   [X] Write a simple component test to ensure the framework is set up correctly.
 
-## Phase 3: Strategic Initiatives (Research)
+## Phase 3: Strategic Initiatives (Next)
 
 -   **[ ] 1. `presenton` Integration Analysis:**
     -   [ ] Review the `presenton` GitHub repository (`https://github.com/presenton/presenton`).
@@ -46,6 +42,10 @@ This document tracks the development tasks for the Interactive Poster Generator 
 -   **[ ] 2. Docker-less Strategy Evaluation:**
     -   [ ] Analyze the pros and cons of removing the Docker dependency.
     -   [ ] Investigate alternatives for managing the LibreOffice dependency to improve portability and ease of setup.
+-   **[ ] 3. General Feature Enhancements:**
+    -   [ ] Implement more sophisticated error handling and user feedback on the frontend.
+    -   [ ] Add user authentication and authorization.
+    -   [ ] Enhance the style customization options.
 
 ## Known Issues / Blockers
 
