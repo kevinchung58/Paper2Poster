@@ -18,28 +18,28 @@ This document tracks the development tasks for the Interactive Poster Generator 
 
 ## Phase 3: Architectural Transformation: Integrating 'presenton' (Next)
 
-**Strategic Direction:** The project will pivot to use `presenton` (`https://github.com/presenton/presenton`) as the core presentation generation engine. Our current backend (`interactive_poster_backend`) will be transformed into a **Backend for Frontend (BFF)**. Its primary role will be to act as an intermediary between our specialized UI and the powerful, generalized `presenton` API. This avoids reinventing the wheel and allows us to focus on creating a unique, interactive user experience for poster generation.
+**Strategic Direction:** The project will pivot to use `presenton` (`https://github.com/presenton/presenton`) as the core presentation generation engine. Our current backend (`interactive_poster_backend`) will be transformed into a **Backend for Frontend (BFF)**. Its primary role will be to act as an intermediary between our specialized UI and the powerful, generalized `presenton` API.
 
--   **[ ] 1. Setup `presenton` Instance:**
-    -   [ ] Following the `presenton` documentation, set up a local instance using Docker.
-    -   [ ] Verify that the `presenton` API is accessible and functional.
+-   **[ ] 1. Manual `presenton` Setup (Docker-less):**
+    -   **[ ] System Dependencies:** Install `python3.11`, `nodejs-20`, `npm`, `nginx`, `libreoffice`, `chromium`, and `ollama` using system package managers.
+    -   **[ ] Python Dependencies:** Install all Python packages listed in `Dockerfile.dev` using `pip`.
+    -   **[ ] Node.js Dependencies:** Navigate to `servers/nextjs` within the `presenton` codebase and run `npm install`.
+    -   **[ ] Nginx Configuration:** Copy the `nginx.conf` file to the system's Nginx configuration directory (e.g., `/etc/nginx/nginx.conf`).
+    -   **[ ] Service Activation:** Sequentially start all required services (Nginx, Ollama, FastAPI, MCP, Next.js) using the commands identified in `start.js`.
 -   **[ ] 2. Refactor Backend to Act as BFF:**
-    -   [ ] Create a new service/client in our backend to communicate with the `presenton` API.
-    -   [ ] Modify `poster_service.py` to translate requests from our UI into API calls to `presenton`'s `/api/v1/ppt/presentation/generate` endpoint.
-    -   [ ] Remove our internal PPTX generation logic (`pptx_generator.py`) and the LibreOffice dependency, as this functionality will be fully delegated to `presenton`.
+    -   [ ] Create a new service/client in our backend to communicate with the now locally running `presenton` API (at `http://localhost:5000`).
+    -   [ ] Modify `poster_service.py` to translate requests from our UI into API calls to `presenton`.
+    -   [ ] Remove our internal PPTX generation logic and the LibreOffice dependency.
 -   **[ ] 3. Adapt Frontend UI:**
     -   [ ] Update the frontend to handle any changes in the API responses from our new BFF.
-    -   [ ] Potentially expand the UI to expose some of `presenton`'s more advanced features (e.g., AI template generation from PPTX, wider theme selection).
--   **[ ] 4. Re-evaluate Feature Enhancements:**
-    -   [ ] In the context of the new architecture, re-assess the implementation strategy for features like user auth, advanced error handling, and style customization.
-
-## Post-Integration Research
-
--   **[ ] Docker-less Strategy Evaluation:** Once the integration is complete and stable, investigate the feasibility and trade-offs of running `presenton` without Docker to simplify the local development setup.
+    -   [ ] Potentially expand the UI to expose some of `presenton`'s more advanced features.
 
 ## Known Issues / Blockers
 
+-   **[CRITICAL] Disk Space Limitation:**
+    -   **Symptom:** `docker pull` command fails with `no space left on device`.
+    -   **Impact:** This **blocks** the official, Docker-based setup of `presenton`. The current plan is to mitigate this by performing a manual, "Docker-less" installation.
 -   **[ ] Frontend Verification (`Playwright`) Blocked:**
     -   **Symptom:** Playwright tests consistently fail with a `TimeoutError`.
     -   **Root Cause:** The backend server (`uvicorn`) fails to start correctly within the test environment.
-    -   **Next Step:** This issue requires an in-depth, isolated debugging session. It is currently de-prioritized in favor of the strategic pivot to `presenton`.
+    -   **Next Step:** This issue is currently de-prioritized in favor of the strategic pivot to `presenton`.
