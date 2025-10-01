@@ -4,52 +4,42 @@ This document tracks the development tasks for the Interactive Poster Generator 
 
 ## Phase 1: Architecture Refinement and Code Quality (Completed)
 
--   **[X] 1. Integrate Testing Framework:**
-    -   [X] Add `pytest`, `httpx`, `pytest-asyncio`, and other required dependencies to `interactive_poster_backend/requirements.txt`.
-    -   [X] Install new dependencies.
-    -   [X] Create a basic test file (`interactive_poster_backend/tests/test_main.py`) and ensure the test runner is configured correctly.
--   **[X] 2. Refactor Complex Business Logic:**
-    -   [X] Create a new `services` module (`interactive_poster_backend/services/`).
-    -   [X] Refactor the complex logic from `poster_router.py:handle_llm_prompt` into a dedicated service function.
-    -   [X] Refactor the complex logic from `database/crud.py:update_poster_data` into a dedicated service function.
--   **[X] 3. Clean Up Schema Definitions:**
-    -   [X] Remove all commented-out old code and duplicate class definitions in `schemas/models.py`.
-    -   [X] Standardize Pydantic model definitions for clarity and consistency.
--   **[X] 4. Fix Frontend Linting Issues:**
-    -   [X] Address all `@typescript-eslint/no-explicit-any` errors by providing proper types.
-    -   [X] Remove all unused variables (`@typescript-eslint/no-unused-vars`).
+-   **[X] 1. Integrate Testing Framework:** Established a robust testing foundation for the backend.
+-   **[X] 2. Refactor Complex Business Logic:** Migrated business logic to a dedicated service layer.
+-   **[X] 3. Clean Up Schema Definitions:** Modernized and clarified all Pydantic data models.
+-   **[X] 4. Fix Frontend Linting Issues:** Eliminated all critical linting errors in the React codebase.
 
 ## Phase 2: Solidification and DX (Developer Experience) (Completed)
 
--   **[X] 1. Backend Unit Tests:**
-    -   [X] Write comprehensive unit tests for the new `poster_service.py` to cover various update scenarios and ensure business logic is correct.
--   **[X] 2. Harden System Dependencies:**
-    -   [X] Replace hardcoded strings like `"poster_title"` with enums or constants.
-    -   [X] Add a startup check to verify that the `soffice` command (LibreOffice) is available in the system's PATH.
--   **[X] 3. Generate Static API Documentation:**
-    -   [X] Create a script to generate a static `openapi.json` file from the running FastAPI application.
-    -   [X] Commit the `openapi.json` to the repository to facilitate easier frontend development.
--   **[X] 4. Frontend Testing Framework:**
-    -   [X] Add a testing framework (Vitest) to the `interactive-poster-ui` project.
-    -   [X] Write a simple component test to ensure the framework is set up correctly.
+-   **[X] 1. Backend Unit Tests:** Wrote comprehensive unit tests for the new service layer.
+-   **[X] 2. Harden System Dependencies:** Removed "magic strings" with enums and added dependency checks.
+-   **[X] 3. Generate Static API Documentation:** Created a script to generate a static `openapi.json`.
+-   **[X] 4. Frontend Testing Framework:** Successfully integrated Vitest into the frontend project.
 
-## Phase 3: Strategic Initiatives (Next)
+## Phase 3: Architectural Transformation: Integrating 'presenton' (Next)
 
--   **[ ] 1. `presenton` Integration Analysis:**
-    -   [ ] Review the `presenton` GitHub repository (`https://github.com/presenton/presenton`).
-    -   [ ] Analyze its features, technology stack, and architecture.
-    -   [ ] Propose a strategy for how it could be integrated as a platform for this project.
--   **[ ] 2. Docker-less Strategy Evaluation:**
-    -   [ ] Analyze the pros and cons of removing the Docker dependency.
-    -   [ ] Investigate alternatives for managing the LibreOffice dependency to improve portability and ease of setup.
--   **[ ] 3. General Feature Enhancements:**
-    -   [ ] Implement more sophisticated error handling and user feedback on the frontend.
-    -   [ ] Add user authentication and authorization.
-    -   [ ] Enhance the style customization options.
+**Strategic Direction:** The project will pivot to use `presenton` (`https://github.com/presenton/presenton`) as the core presentation generation engine. Our current backend (`interactive_poster_backend`) will be transformed into a **Backend for Frontend (BFF)**. Its primary role will be to act as an intermediary between our specialized UI and the powerful, generalized `presenton` API. This avoids reinventing the wheel and allows us to focus on creating a unique, interactive user experience for poster generation.
+
+-   **[ ] 1. Setup `presenton` Instance:**
+    -   [ ] Following the `presenton` documentation, set up a local instance using Docker.
+    -   [ ] Verify that the `presenton` API is accessible and functional.
+-   **[ ] 2. Refactor Backend to Act as BFF:**
+    -   [ ] Create a new service/client in our backend to communicate with the `presenton` API.
+    -   [ ] Modify `poster_service.py` to translate requests from our UI into API calls to `presenton`'s `/api/v1/ppt/presentation/generate` endpoint.
+    -   [ ] Remove our internal PPTX generation logic (`pptx_generator.py`) and the LibreOffice dependency, as this functionality will be fully delegated to `presenton`.
+-   **[ ] 3. Adapt Frontend UI:**
+    -   [ ] Update the frontend to handle any changes in the API responses from our new BFF.
+    -   [ ] Potentially expand the UI to expose some of `presenton`'s more advanced features (e.g., AI template generation from PPTX, wider theme selection).
+-   **[ ] 4. Re-evaluate Feature Enhancements:**
+    -   [ ] In the context of the new architecture, re-assess the implementation strategy for features like user auth, advanced error handling, and style customization.
+
+## Post-Integration Research
+
+-   **[ ] Docker-less Strategy Evaluation:** Once the integration is complete and stable, investigate the feasibility and trade-offs of running `presenton` without Docker to simplify the local development setup.
 
 ## Known Issues / Blockers
 
 -   **[ ] Frontend Verification (`Playwright`) Blocked:**
     -   **Symptom:** Playwright tests consistently fail with a `TimeoutError`.
     -   **Root Cause:** The backend server (`uvicorn`) fails to start correctly within the test environment.
-    -   **Next Step:** This issue requires an in-depth, isolated debugging session. In the interest of efficiency, this task is currently **skipped**.
+    -   **Next Step:** This issue requires an in-depth, isolated debugging session. It is currently de-prioritized in favor of the strategic pivot to `presenton`.
