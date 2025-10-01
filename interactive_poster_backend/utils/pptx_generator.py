@@ -1,4 +1,6 @@
 import pptx
+from typing import Optional, Union
+from typing import Optional, Union
 from pptx.util import Inches, Pt
 from pptx.enum.shapes import MSO_SHAPE # Not used in current logic, but can be kept for future
 from pptx.dml.color import RGBColor
@@ -187,7 +189,7 @@ def generate_pptx_from_data(poster_data: schemas.Poster, output_path: str) -> No
                 is_local_file_from_upload = False # Flag to manage BytesIO closing
 
                 if img_path_or_url.startswith(('http://', 'https://')):
-                    try
+                    try:
                         logger.info(f"Downloading image from URL: {img_path_or_url}")
                         response = requests.get(img_path_or_url, stream=True, timeout=10)
                         response.raise_for_status()

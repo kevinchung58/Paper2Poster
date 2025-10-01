@@ -86,3 +86,40 @@ def convert_pptx_to_png_soffice(pptx_path: str | Path, output_dir: str | Path) -
     except Exception as e:
         print(f"An unexpected error occurred during soffice execution: {e}")
         return None
+
+from ..schemas import models as schemas
+
+from ..schemas import models as schemas
+
+def background_convert_and_update_status(poster_id: str, pptx_path: str, output_dir: str):
+    """
+    A background task that converts a PPTX to PNG and updates the poster's status in the DB.
+    """
+    db: Session = SessionLocal()
+    try:
+        # 1. Update status to 'generating'
+        crud.update_poster_data(db, poster_id=poster_id, poster_update=schemas.PosterUpdate(preview_status="generating"))
+
+        # 2. Perform the conversion
+        png_path = convert_pptx_to_png_soffice(pptx_path, output_dir)
+
+        # 3. Update status based on result
+        if png_path:
+            update_data = schemas.PosterUpdate(preview_status="completed", preview_image_path=png_path)
+            crud.update_poster_data(db, poster_id=poster_id, poster_update=update_data)
+            print(f"Background conversion succeeded for poster {poster_id}. PNG at {png_path}")
+        else:
+            update_data = schemas.PosterUpdate(preview_status="failed", preview_last_error="Soffice conversion failed. See logs for details.")
+            crud.update_poster_data(db, poster_id=poster_id, poster_update=update_data)
+            print(f"Background conversion failed for poster {poster_id}.")
+
+    except Exception as e:
+        print(f"Error in background conversion task for poster {poster_id}: {e}")
+        try:
+            # Try to log the error to the database
+            update_data = schemas.PosterUpdate(preview_status="failed", preview_last_error=f"An unexpected error occurred in the background task: {str(e)}")
+            crud.update_poster_data(db, poster_id=poster_id, poster_update=update_data)
+        except Exception as db_e:
+            print(f"Failed to even update DB with failure status for poster {poster_id}: {db_e}")
+    finally:
+        db.close()
