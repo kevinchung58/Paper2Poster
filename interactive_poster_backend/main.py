@@ -9,6 +9,7 @@ from .utils import cleanup
 from .database import database_setup
 import logging
 import os # Added for os.makedirs
+import shutil # For checking external dependencies
 
 # Configure logging for main application
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -51,6 +52,21 @@ async def startup_event():
         logger.info("Temporary file cleanup finished successfully.")
     except Exception as e:
         logger.error(f"Error during startup cleanup: {e}", exc_info=True)
+
+    # Check for external dependencies
+    logger.info("Checking for external dependencies...")
+    if not shutil.which(config.SOFFICE_COMMAND):
+        logger.warning(
+            f"\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+            f"!!! WARNING: '{config.SOFFICE_COMMAND}' command not found in PATH.          !!!\n"
+            f"!!! Poster preview generation will fail.                   !!!\n"
+            f"!!! Please install LibreOffice and ensure its 'soffice'  !!!\n"
+            f"!!! command is in the system's PATH or set the           !!!\n"
+            f"!!! SOFFICE_COMMAND environment variable.                  !!!\n"
+            f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        )
+    else:
+        logger.info(f"External dependency '{config.SOFFICE_COMMAND}' found.")
 
 # --- CORS Configuration ---
 # Define the list of origins that should be allowed to make cross-origin requests.

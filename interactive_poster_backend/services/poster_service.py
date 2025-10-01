@@ -2,6 +2,7 @@
 from sqlalchemy.orm import Session
 from ..schemas import models as schemas
 from ..database import crud, models_db
+from ..enums import PosterElement
 from camel.agents import ChatAgent
 from camel.messages import BaseMessage
 from typing import Optional, Tuple
@@ -43,9 +44,6 @@ def process_poster_update(
     """
     Handles the complex logic of updating a poster based on a prompt request.
     This includes direct updates, style changes, and LLM-based content generation.
-
-    Returns a tuple of the updated database poster object and a string message
-    for the API response.
     """
     db_poster = crud.get_poster(db=db, poster_id=poster_id)
     if not db_poster:
@@ -68,18 +66,17 @@ def process_poster_update(
         current_pydantic_poster.style_overrides = request.style_overrides
         response_message += "Style overrides applied. "
 
-    # 2. Handle Direct Section Updates (e.g., for image URLs)
+    # 2. Handle Direct Section Updates
     if request.is_direct_update and request.sections is not None:
         update_payload_dict["sections"] = request.sections
-        sections_update_message = "Poster sections updated directly. "
-        response_message += sections_update_message
+        response_message += "Poster sections updated directly. "
         skip_llm_or_direct_field_prompt_processing = True
 
     # 3. Handle LLM or Direct Content Updates via Prompt Text
     if request.prompt_text is not None and not skip_llm_or_direct_field_prompt_processing:
         if request.is_direct_update:
-            if not request.target_element_id or request.target_element_id.startswith("section_"):
-                response_message += "Error: Direct content update requires a specific target (e.g., poster_title, poster_abstract). "
+            if not request.target_element_id or PosterElement.is_section_element(request.target_element_id):
+                response_message += "Error: Direct content update requires a non-section target (e.g., poster_title). "
             else:
                 llm_generated_content_for_update = request.prompt_text
                 response_message += f"Content for '{request.target_element_id}' directly updated. "
@@ -94,8 +91,6 @@ def process_poster_update(
                     if llm_response_obj.msgs and llm_response_obj.msgs[0].content:
                         llm_generated_content_for_update = llm_response_obj.msgs[0].content.strip()
                         response_message += f"LLM response: \"{llm_generated_content_for_update}\". "
-                    elif llm_response_obj.info and llm_response_obj.info.get('termination_reasons'):
-                        response_message += f"LLM call issue: {str(llm_response_obj.info['termination_reasons'])}. "
                     else:
                         response_message += "LLM produced no content update. "
                 except Exception as e:
@@ -114,26 +109,19 @@ def process_poster_update(
     # 4. Finalize and save to DB
     if not update_payload_dict and not request.prompt_text:
         if not response_message:
-            response_message = "No update action performed (no changes specified)."
+            response_message = "No update action performed."
     elif not response_message and update_payload_dict:
         response_message = "Poster attributes updated."
 
     if update_payload_dict:
-        # If sections are being replaced, clean up old files first.
         if "sections" in update_payload_dict:
-            original_sections_orm = list(db_poster.sections)
-            for old_sec_orm in original_sections_orm:
+            for old_sec_orm in list(db_poster.sections):
                 if old_sec_orm.image_urls:
                     for rel_path in old_sec_orm.image_urls:
                         _delete_uploaded_image_file(rel_path)
-
                 old_section_dir = config.UPLOADED_IMAGES_DIR / f"poster_{poster_id}" / f"section_{old_sec_orm.section_id}"
-                if old_section_dir.exists() and old_section_dir.is_dir():
-                    try:
-                        shutil.rmtree(old_section_dir)
-                        logger.info(f"Deleted section image directory (due to section replacement): {old_section_dir}")
-                    except Exception as e:
-                        logger.error(f"Error deleting section image directory {old_section_dir}: {e}", exc_info=True)
+                if old_section_dir.exists():
+                    shutil.rmtree(old_section_dir, ignore_errors=True)
 
         poster_update_schema = schemas.PosterUpdate(**update_payload_dict)
         updated_db_poster = crud.update_poster_data(db=db, poster_id=poster_id, poster_update=poster_update_schema)
@@ -148,27 +136,27 @@ def _build_llm_contextual_prompt(request: schemas.OriginalLLMPromptRequest, post
     target_id = request.target_element_id
     prompt_text = request.prompt_text
 
-    if target_id == "poster_title":
-        return f"You are editing the title of a poster. Current title: '{poster.title}'. Theme: '{poster.selected_theme}'. User instruction: '{prompt_text}'. Respond with only the new title text."
-    if target_id == "poster_abstract":
-        return f"You are editing the abstract of poster '{poster.title}' (Theme: '{poster.selected_theme}'). Current abstract: '{poster.abstract}'. User instruction: '{prompt_text}'. Respond with only the new abstract text."
-    if target_id == "poster_conclusion":
-        return f"Editing conclusion for poster '{poster.title}' (Theme: '{poster.selected_theme}'). Current: '{poster.conclusion}'. Instruction: '{prompt_text}'. Respond with new text."
+    if target_id == PosterElement.POSTER_TITLE:
+        return f"You are editing the title of a poster. Current title: '{poster.title}'. User instruction: '{prompt_text}'. Respond with only the new title text."
+    if target_id == PosterElement.POSTER_ABSTRACT:
+        return f"You are editing the abstract of poster '{poster.title}'. Current abstract: '{poster.abstract}'. User instruction: '{prompt_text}'. Respond with only the new abstract text."
+    if target_id == PosterElement.POSTER_CONCLUSION:
+        return f"Editing conclusion for poster '{poster.title}'. Current: '{poster.conclusion or ''}'. Instruction: '{prompt_text}'. Respond with new text."
 
-    if target_id and target_id.startswith("section_"):
+    if target_id and PosterElement.is_section_element(target_id):
         parts = target_id.split('_')
         if len(parts) == 3:
             sec_id, target_type = parts[1], parts[2]
             target_section_obj = next((s for s in poster.sections if s.section_id == sec_id), None)
-            if target_section_obj:
+            if target_section_obj and target_type in [PosterElement.SECTION_TITLE, PosterElement.SECTION_CONTENT]:
                 field_name = "title" if target_type == "title" else "content"
                 current_val = getattr(target_section_obj, f"section_{field_name}")
-                return f"Editing section {field_name} for section '{target_section_obj.section_title}' on poster '{poster.title}'. Current {field_name}: '{current_val}'. User instruction: '{prompt_text}'. Respond with new text."
+                return f"Editing section {field_name} for section '{target_section_obj.section_title}'. Current {field_name}: '{current_val}'. Instruction: '{prompt_text}'. Respond with new text."
 
     if not target_id:
-        return f"Poster: '{poster.title}' (Theme: '{poster.selected_theme}'). Abstract: '{poster.abstract}'. User instruction: '{prompt_text}'. Provide general suggestions."
+        return f"Poster: '{poster.title}'. Abstract: '{poster.abstract}'. User instruction: '{prompt_text}'. Provide general suggestions."
 
-    return "" # Return empty string for invalid targets
+    return ""
 
 def _apply_llm_update_to_payload(
     content: str,
@@ -177,13 +165,13 @@ def _apply_llm_update_to_payload(
     poster: schemas.Poster
 ):
     """Helper to apply the LLM's generated content to the correct field in the update payload."""
-    if target_id == "poster_title":
+    if target_id == PosterElement.POSTER_TITLE:
         payload["title"] = content
-    elif target_id == "poster_abstract":
+    elif target_id == PosterElement.POSTER_ABSTRACT:
         payload["abstract"] = content
-    elif target_id == "poster_conclusion":
+    elif target_id == PosterElement.POSTER_CONCLUSION:
         payload["conclusion"] = content
-    elif target_id.startswith("section_") and "sections" not in payload:
+    elif PosterElement.is_section_element(target_id) and "sections" not in payload:
         parts = target_id.split('_')
         if len(parts) == 3:
             sec_id, target_type = parts[1], parts[2]
