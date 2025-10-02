@@ -1,3 +1,4 @@
+from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func # For count
 import os
@@ -56,176 +57,44 @@ def create_poster(db: Session, poster_data: schemas.PosterCreate) -> models_db.D
     return db_poster
 
 def update_poster_data(db: Session, poster_id: str, poster_update: schemas.PosterUpdate) -> models_db.DbPoster | None:
-    """Update a poster's attributes and its sections."""
+    """
+    Updates a poster's data in the database.
+    This function now ONLY handles database operations.
+    File system operations (like cleanup) are handled by the service layer.
+    """
     db_poster = get_poster(db, poster_id)
     if not db_poster:
         return None
 
-    # Store original sections data for comparison and cleanup
-    original_sections_orm = list(db_poster.sections) # Make a copy before modification
-    original_sections_map = {s.section_id: s for s in original_sections_orm}
+    update_data = poster_update.dict(exclude_unset=True)
 
-    # Iterate over fields that were explicitly set in the Pydantic model
-    for field in poster_update.__fields_set__:
-        value = getattr(poster_update, field)
-        if field == "sections":
-            new_sections_orm_list = []
-            new_section_ids_from_payload = set()
+    # Handle section replacement purely at the DB level
+    if "sections" in update_data:
+        # This replaces the entire collection of sections for the poster.
+        # SQLAlchemy will automatically handle deleting the old sections
+        # from the DB due to the cascade="all, delete-orphan" setting on the relationship.
+        new_sections_data = update_data.pop("sections")
+        db_poster.sections = [
+            models_db.DbSection(
+                section_id=uuid.uuid4().hex,
+                poster_id=db_poster.poster_id,
+                **section_data
+            ) for section_data in new_sections_data
+        ]
 
-            if value is not None: # If sections are provided in payload (can be empty list)
-                for section_create_data in value: # value is List[schemas.SectionCreate]
-                    # This assumes SectionCreate does not have section_id, so all are new.
-                    # If updating existing sections by ID was intended, SectionCreate would need section_id
-                    # and we'd fetch existing or create new.
-                    # Given current frontend sends full list of sections including existing ones (as SectionCreate),
-                    # this effectively means replacing all sections.
-                    new_section_orm = models_db.DbSection(
-                        section_id=uuid.uuid4().hex,
-                        poster_id=db_poster.poster_id,
-                        section_title=section_create_data.section_title,
-                        section_content=section_create_data.section_content,
-                        image_urls=section_create_data.image_urls,
-                    )
-                    new_sections_orm_list.append(new_section_orm)
-                    if hasattr(section_create_data, 'section_id') and section_create_data.section_id: # Should not happen with SectionCreate
-                         new_section_ids_from_payload.add(section_create_data.section_id)
-                    else: # For truly new sections, their generated ID won't be in old_section_ids_to_delete_dirs_for
-                         pass
-
-
-            # Cleanup: Delete files from sections that are removed or whose image_urls have changed
-            # This logic needs to be precise. If sections are entirely replaced (identified by new IDs),
-            # then all old section image directories should be removed.
-            # If a section is updated (same ID, but new image_urls list), then only diff of URLs should be deleted.
-            # Current logic with SectionCreate implies all sections are new, so all old ones are removed.
-
-            # Delete files and directories of all old sections because they are being replaced
-            for old_sec_orm in original_sections_orm:
-                if old_sec_orm.image_urls:
-                    for rel_path in old_sec_orm.image_urls:
-                        _delete_uploaded_image_file(rel_path)
-
-                old_section_dir = config.UPLOADED_IMAGES_DIR / f"poster_{poster_id}" / f"section_{old_sec_orm.section_id}"
-                if old_section_dir.exists() and old_section_dir.is_dir():
-                    try:
-                        shutil.rmtree(old_section_dir)
-                        logger.info(f"Deleted section image directory (due to section replacement): {old_section_dir}")
-                    except Exception as e:
-                        logger.error(f"Error deleting section image directory {old_section_dir}: {e}", exc_info=True)
-
-            db_poster.sections = new_sections_orm_list # Assign the new list of ORM sections
-
-        elif field == "style_overrides":
-            if value is None: # Client explicitly sent "style_overrides": null
-                db_poster.style_overrides = None
-            else: # Client sent an object for style_overrides
-                # Assuming 'value' is already a PosterElementStyles Pydantic model
-                db_poster.style_overrides = value.dict(exclude_unset=True) # Store as dict
+    # Handle style overrides
+    if "style_overrides" in update_data:
+        style_value = update_data.pop("style_overrides")
+        if style_value is None:
+            db_poster.style_overrides = None
         else:
-            # For other simple fields like title, abstract, selected_theme etc.
-            # If value is None for a non-nullable DB field (e.g. selected_theme),
-            # this could cause an IntegrityError if the DB doesn't apply its default on None.
-            # For `selected_theme` (non-nullable, default "default"), if client sends `null`,
-            # it's better to apply the default explicitly or disallow `null` in Pydantic schema.
-            # For now, direct assignment. If `selected_theme=None` is passed for `nullable=False` field,
-            # it might error. Pydantic `Optional[str]=None` allows `None`.
-            # `poster_update.selected_theme` in Pydantic is `Optional[str] = None`,
-            # so if client sends `null`, `value` will be `None`.
-            # `DbPoster.selected_theme` is `nullable=False`. This is a potential conflict.
-            # Let's handle it: if key is 'selected_theme' and value is None, use DB default.
-            # However, setattr won't trigger DB default directly with None on non-nullable.
-            # This logic is better handled by Pydantic schema validation or specific setter in model if complex.
-            # For now, direct setattr:
-            if field == "selected_theme" and value is None:
-                 # Skip setting `None` to a non-nullable field if that's not desired.
-                 # Or set to default. For now, if client sends null for selected_theme, it's a problem.
-                 # Let's assume client won't send null for selected_theme if it means "no change".
-                 # If client means "reset to default", this logic needs to be specific.
-                 # The current Pydantic `selected_theme: Optional[str] = None` in PosterUpdate
-                 # means it can be omitted (no change) or set to a string. Setting to `null` is not typical for reset.
-                 # So, if value is not None, we set it. If it is None, and field is in __fields_set__,
-                 # it means explicit null, which is an issue for non-nullable `selected_theme`.
-                 # For simplicity, let's assume `value` will be a valid theme string here due to Pydantic validation.
-                 pass # This pass means if selected_theme is None and in __fields_set__, it won't be updated.
-                      # This is not ideal. A client sending "selected_theme": null should probably error or reset.
-                      # Corrected logic: if field is set, and value is not None, update.
-                      # If value is None for a non-nullable field, it's more complex.
-                      # The previous loop `for key, value in update_data.items(): setattr(db_poster, key, value)`
-                      # was simpler for fields guaranteed to be valid by Pydantic.
-                      # Let's revert to that for simple fields and handle complex ones like style_overrides and sections separately.
-            setattr(db_poster, field, value)
+            db_poster.style_overrides = style_value
 
-    # Re-applying the simpler loop for direct attributes, and handling complex types separately
-    # This is because __fields_set__ logic became complicated with non-nullable fields.
-    update_data_dict = poster_update.dict(exclude_unset=True)
-    for key, value_from_dict in update_data_dict.items():
-        if key == "sections":
-            # This is now handled above if "sections" is in __fields_set__
-            # To avoid double processing if we combine strategies:
-            if "sections" not in poster_update.__fields_set__: # If not handled by __fields_set__ loop (e.g. if that was removed)
-                # ... (section replacement logic as above) ...
-                pass # This part is complex due to replacing the whole collection.
-                     # The __fields_set__ approach for sections is better.
-        elif key == "style_overrides":
-             # Also handled by __fields_set__ loop if "style_overrides" is in __fields_set__
-            if "style_overrides" not in poster_update.__fields_set__:
-                if value_from_dict is None:
-                    db_poster.style_overrides = None
-                else: # It's a dict from poster_update.dict()
-                    db_poster.style_overrides = value_from_dict
-        else: # title, abstract, conclusion, theme, selected_theme
-            # For selected_theme (non-nullable in DB): if value_from_dict is None, this will fail.
-            # Pydantic PosterUpdate has selected_theme: Optional[str]=None.
-            # This means client can send "selected_theme": null.
-            # This should either be an error, or map to default.
-            if key == "selected_theme" and value_from_dict is None:
-                # Option 1: Raise error (better for explicit control)
-                # raise ValueError("selected_theme cannot be null")
-                # Option 2: Set to DB default (if known and desired)
-                db_poster.selected_theme = "default" # Assuming "default" is the actual default
-            else:
-                setattr(db_poster, key, value_from_dict)
+    # Update remaining simple fields
+    for key, value in update_data.items():
+        setattr(db_poster, key, value)
 
-    # The __fields_set__ approach is cleaner. Let's stick to that and refine it.
-    # Previous SEARCH block was for the loop: for key, value in update_data.items():
-    # The REPLACE block should be the refined version using __fields_set__.
-
-    # Corrected refined logic using __fields_set__ from the subtask description:
-    for field in poster_update.__fields_set__: # Pydantic v1 way
-        value = getattr(poster_update, field)
-        if field == "sections":
-            if value is not None:
-                # Clear existing sections first
-                db_poster.sections = []
-                # db.flush() # Not strictly needed with cascade if objects are expunged or handled by session
-                for section_create_data in value: # value is List[SectionCreate]
-                    db_section = models_db.DbSection(
-                        section_id=uuid.uuid4().hex,
-                        poster_id=db_poster.poster_id,
-                        **section_create_data.dict() # This should now correctly include 'image_urls'
-                                                     # if SectionCreate has it and DbSection init accepts it.
-                    )
-                    db_poster.sections.append(db_section)
-            else: # Client explicitly sent "sections": null, so clear them
-                db_poster.sections = []
-        elif field == "style_overrides":
-            if value is None: # Client explicitly sent "style_overrides": null
-                db_poster.style_overrides = None
-            else: # Client sent an object for style_overrides
-                db_poster.style_overrides = value.dict(exclude_unset=True)
-        elif field == "selected_theme":
-            if value is None:
-                # This implies client sent "selected_theme": null.
-                # Since DB field is non-nullable with a default, we should set it to the default.
-                db_poster.selected_theme = "default" # Match DB model default
-            else:
-                db_poster.selected_theme = value
-        else: # For other simple fields like title, abstract, conclusion, theme
-            setattr(db_poster, field, value)
-
-    # The DbPoster model's onupdate for last_modified should handle this automatically
-    # db_poster.last_modified = datetime.now(timezone.utc)
-
+    # The 'last_modified' timestamp is handled by the ORM 'onupdate' event.
     db.commit()
     db.refresh(db_poster)
     return db_poster

@@ -1,0 +1,871 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Interactive Poster Generator API",
+    "description": "API for creating and managing interactive scientific posters.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/posters": {
+      "post": {
+        "tags": [
+          "Posters API"
+        ],
+        "summary": "Create Poster Session",
+        "operationId": "create_poster_session_api_v1_posters_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OriginalCreatePosterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APICreatePosterResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posters/{poster_id}": {
+      "get": {
+        "tags": [
+          "Posters API"
+        ],
+        "summary": "Get Poster Data Endpoint",
+        "operationId": "get_poster_data_endpoint_api_v1_posters__poster_id__get",
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Poster"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posters/{poster_id}/prompt": {
+      "post": {
+        "tags": [
+          "Posters API"
+        ],
+        "summary": "Handle Llm Prompt",
+        "operationId": "handle_llm_prompt_api_v1_posters__poster_id__prompt_post",
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OriginalLLMPromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APILLMPromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posters/{poster_id}/preview": {
+      "get": {
+        "tags": [
+          "Posters API"
+        ],
+        "summary": "Get Poster Preview",
+        "operationId": "get_poster_preview_api_v1_posters__poster_id__preview_get",
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posters/{poster_id}/generate_pptx": {
+      "post": {
+        "tags": [
+          "Posters API"
+        ],
+        "summary": "Trigger Pptx Generation",
+        "operationId": "trigger_pptx_generation_api_v1_posters__poster_id__generate_pptx_post",
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIGeneratePPTXResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posters/{poster_id}/download_pptx": {
+      "get": {
+        "tags": [
+          "Posters API"
+        ],
+        "summary": "Download Pptx File",
+        "operationId": "download_pptx_file_api_v1_posters__poster_id__download_pptx_get",
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posters/{poster_id}/sections/{section_id}/upload_image": {
+      "post": {
+        "tags": [
+          "Posters API"
+        ],
+        "summary": "Upload an image for a specific poster section",
+        "operationId": "upload_image_for_section_endpoint_api_v1_posters__poster_id__sections__section_id__upload_image_post",
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Poster Id"
+            }
+          },
+          {
+            "name": "section_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Section Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_image_for_section_endpoint_api_v1_posters__poster_id__sections__section_id__upload_image_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Poster"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Root"
+        ],
+        "summary": "Read Root",
+        "description": "Root endpoint for the API.\nProvides a welcome message and basic API information.",
+        "operationId": "read_root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "APICreatePosterResponse": {
+        "properties": {
+          "poster_id": {
+            "type": "string",
+            "title": "Poster Id"
+          },
+          "poster_data": {
+            "$ref": "#/components/schemas/Poster"
+          },
+          "preview_image_url": {
+            "type": "string",
+            "title": "Preview Image Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "poster_id",
+          "poster_data",
+          "preview_image_url"
+        ],
+        "title": "APICreatePosterResponse",
+        "description": "Response for a successful poster creation."
+      },
+      "APIGeneratePPTXResponse": {
+        "properties": {
+          "poster_id": {
+            "type": "string",
+            "title": "Poster Id"
+          },
+          "download_url": {
+            "type": "string",
+            "title": "Download Url"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "poster_id",
+          "download_url",
+          "message"
+        ],
+        "title": "APIGeneratePPTXResponse",
+        "description": "Response for a successful PPTX generation trigger."
+      },
+      "APILLMPromptResponse": {
+        "properties": {
+          "poster_id": {
+            "type": "string",
+            "title": "Poster Id"
+          },
+          "llm_response_text": {
+            "type": "string",
+            "title": "Llm Response Text"
+          },
+          "updated_poster_data": {
+            "$ref": "#/components/schemas/Poster"
+          },
+          "preview_image_url": {
+            "type": "string",
+            "title": "Preview Image Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "poster_id",
+          "llm_response_text",
+          "updated_poster_data",
+          "preview_image_url"
+        ],
+        "title": "APILLMPromptResponse",
+        "description": "Response for a successful prompt submission."
+      },
+      "Body_upload_image_for_section_endpoint_api_v1_posters__poster_id__sections__section_id__upload_image_post": {
+        "properties": {
+          "image_file": {
+            "type": "string",
+            "format": "binary",
+            "title": "Image File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_file"
+        ],
+        "title": "Body_upload_image_for_section_endpoint_api_v1_posters__poster_id__sections__section_id__upload_image_post"
+      },
+      "ElementStyleProperties": {
+        "properties": {
+          "font_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Font Size"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "font_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Font Family"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ElementStyleProperties",
+        "description": "Defines style properties for a single poster element."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "OriginalCreatePosterRequest": {
+        "properties": {
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          }
+        },
+        "type": "object",
+        "title": "OriginalCreatePosterRequest",
+        "description": "Request body for creating a new poster session."
+      },
+      "OriginalLLMPromptRequest": {
+        "properties": {
+          "prompt_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Text"
+          },
+          "target_element_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Element Id"
+          },
+          "selected_theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Theme"
+          },
+          "style_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PosterElementStyles"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_direct_update": {
+            "type": "boolean",
+            "title": "Is Direct Update",
+            "default": false
+          },
+          "sections": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SectionCreate"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "title": "OriginalLLMPromptRequest",
+        "description": "Request body for the main /prompt endpoint."
+      },
+      "Poster": {
+        "properties": {
+          "poster_id": {
+            "type": "string",
+            "title": "Poster Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "abstract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstract"
+          },
+          "conclusion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conclusion"
+          },
+          "selected_theme": {
+            "type": "string",
+            "title": "Selected Theme",
+            "default": "default"
+          },
+          "last_modified": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Modified"
+          },
+          "pptx_file_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pptx File Path"
+          },
+          "preview_image_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Image Path"
+          },
+          "style_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PosterElementStyles"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preview_status": {
+            "type": "string",
+            "title": "Preview Status",
+            "default": "pending"
+          },
+          "preview_last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Last Error"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme",
+            "default": "default_theme"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/Section"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "poster_id",
+          "title",
+          "last_modified"
+        ],
+        "title": "Poster",
+        "description": "Full schema for a poster including its sections."
+      },
+      "PosterElementStyles": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElementStyleProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "abstract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElementStyleProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conclusion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElementStyleProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElementStyleProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section_content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElementStyleProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slide_background": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Background"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PosterElementStyles",
+        "description": "Container for all overridable style elements on a poster."
+      },
+      "Section": {
+        "properties": {
+          "section_id": {
+            "type": "string",
+            "title": "Section Id"
+          },
+          "section_title": {
+            "type": "string",
+            "title": "Section Title"
+          },
+          "section_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Content"
+          },
+          "image_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Image Urls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_id",
+          "section_title"
+        ],
+        "title": "Section",
+        "description": "Full schema for a section, used for reading from DB."
+      },
+      "SectionCreate": {
+        "properties": {
+          "section_title": {
+            "type": "string",
+            "title": "Section Title"
+          },
+          "section_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Content"
+          },
+          "image_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Image Urls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_title"
+        ],
+        "title": "SectionCreate",
+        "description": "Schema for creating a new section."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

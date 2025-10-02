@@ -1,7 +1,16 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import * as api from '../services/api';
-import axios from 'axios';
 import { PosterElementStyles } from '../types/posterTypes';
+
+// --- Custom Error Type ---
+interface ApiError {
+    response?: {
+        data?: {
+            detail?: string;
+        };
+    };
+    message?: string;
+}
 
 // --- State and Context Interfaces ---
 
@@ -30,7 +39,7 @@ interface AppContextType extends AppState {
   updateStyleOverrides: (newOverrides: PosterElementStyles) => Promise<void>;
   directUpdateElement: (targetId: string, newContent: string) => Promise<void>;
   updateSectionImageUrls: (sectionId: string, newImageUrls: string[]) => Promise<void>;
-  uploadImageForSection: (sectionId: string, file: File) => Promise<void>; // New action
+  uploadImageForSection: (sectionId: string, file: File) => Promise<void>;
 }
 
 const initialState: AppState = {
@@ -55,7 +64,7 @@ type Action =
       type: 'UPDATE_POSTER_SUCCESS';
       payload: {
         updatedPosterData: api.PosterData;
-        previewImageUrl: string;
+        previewImageUrl: string | null;
         systemMessageText?: string;
         llmMessage?: ChatMessage;
       }
@@ -116,11 +125,10 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Helper for API responses that update poster data
   const handlePosterUpdateResponse = (
-    response: api.LLMPromptResponse | api.CreatePosterResponse, // CreatePosterResponse for startNewPoster
+    response: api.LLMPromptResponse | api.CreatePosterResponse,
     systemMessageText?: string,
-    llmMessageText?: string // Only for LLM responses
+    llmMessageText?: string
   ) => {
     const payload: Extract<Action, { type: 'UPDATE_POSTER_SUCCESS' }>['payload'] = {
       updatedPosterData: response.poster_data,
@@ -134,15 +142,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     dispatch({ type: 'UPDATE_POSTER_SUCCESS', payload });
   };
 
-
-  // Polling logic (from previous subtask)
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     const pollPosterStatus = async () => {
       if (!state.posterId) { if (intervalId) clearInterval(intervalId); return; }
       try {
         const posterDataResponse = await api.getPosterState(state.posterId);
-        // getPosterState returns PosterData directly now
         dispatch({
           type: 'UPDATE_POSTER_SUCCESS',
           payload: {
@@ -161,15 +166,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       intervalId = setInterval(pollPosterStatus, 3000);
     }
     return () => { if (intervalId) clearInterval(intervalId); };
-  }, [state.posterId, state.posterData, state.posterData?.preview_status, dispatch]);
-
+  }, [state.posterId, state.posterData, state.posterData?.preview_status, state.previewImageUrl, dispatch]);
 
   const startNewPoster = async (topic?: string) => {
     dispatch({ type: 'NEW_POSTER_START' });
     try {
       const response = await api.createPosterSession(topic);
       dispatch({ type: 'NEW_POSTER_SUCCESS', payload: response });
-    } catch (err) { /* ... */ }
+    } catch (err) {
+      const error = err as ApiError;
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to start a new poster session.';
+      dispatch({ type: 'OPERATION_FAILURE', payload: errorMessage });
+      dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error: ${errorMessage}`, type: 'error' } });
+    }
   };
 
   const sendChatMessage = async (promptText: string, targetElementId?: string) => {
@@ -179,7 +188,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const response = await api.sendLLMPrompt(state.posterId, promptText, targetElementId);
       handlePosterUpdateResponse(response, undefined, response.llm_response_text);
-    } catch (err) { /* ... */ }
+    } catch (err) {
+      const error = err as ApiError;
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to send prompt.';
+      dispatch({ type: 'OPERATION_FAILURE', payload: errorMessage });
+      dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error: ${errorMessage}`, type: 'error' } });
+    }
   };
 
   const updatePosterTheme = async (newTheme: string) => {
@@ -189,7 +203,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const response = await api.sendLLMPrompt(state.posterId, undefined, undefined, newTheme, undefined, true);
       handlePosterUpdateResponse(response, response.llm_response_text || `Theme updated to ${newTheme}.`);
-    } catch (err) { /* ... */ }
+    } catch (err) {
+      const error = err as ApiError;
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to update theme.';
+      dispatch({ type: 'OPERATION_FAILURE', payload: errorMessage });
+      dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error: ${errorMessage}`, type: 'error' } });
+    }
   };
 
   const updateStyleOverrides = async (newOverrides: PosterElementStyles) => {
@@ -199,7 +218,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const response = await api.sendLLMPrompt(state.posterId, undefined, undefined, undefined, newOverrides, true);
       handlePosterUpdateResponse(response, response.llm_response_text || 'Style overrides applied.');
-    } catch (err) { /* ... */ }
+    } catch (err) {
+      const error = err as ApiError;
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to apply styles.';
+      dispatch({ type: 'OPERATION_FAILURE', payload: errorMessage });
+      dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error: ${errorMessage}`, type: 'error' } });
+    }
   };
 
   const directUpdateElement = async (targetId: string, newContent: string) => {
@@ -211,7 +235,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         undefined, undefined, true
       );
       handlePosterUpdateResponse(response, response.llm_response_text || `Element '${targetId}' updated.`);
-    } catch (err) { /* ... */ }
+    } catch (err) {
+      const error = err as ApiError;
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to update element.';
+      dispatch({ type: 'OPERATION_FAILURE', payload: errorMessage });
+      dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error: ${errorMessage}`, type: 'error' } });
+    }
   };
 
   const updateSectionImageUrls = async (sectionId: string, newImageUrls: string[]) => {
@@ -236,8 +265,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         state.posterId, undefined, undefined, undefined, undefined, true, currentSections
       );
       handlePosterUpdateResponse(response, response.llm_response_text || systemMessageText);
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.detail || err.message || 'Failed to update image URLs.';
+    } catch (err) {
+      const error = err as ApiError;
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to update image URLs.';
       dispatch({ type: 'OPERATION_FAILURE', payload: errorMsg });
       dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error: ${errorMsg}`, type: 'error' } });
     }
@@ -255,19 +285,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       const updatedPosterDataFromUpload = await api.uploadSectionImage(state.posterId, sectionId, file);
-
-      // Backend returns the full updated Poster object.
-      // The backend endpoint already sets preview_status to "pending".
       dispatch({
         type: 'UPDATE_POSTER_SUCCESS',
         payload: {
           updatedPosterData: updatedPosterDataFromUpload,
-          previewImageUrl: updatedPosterDataFromUpload.preview_image_url, // This will be from the updated poster data
+          previewImageUrl: updatedPosterDataFromUpload.preview_image_url,
           systemMessageText: `Image '${file.name}' uploaded for section. Preview is updating.`
         }
       });
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to upload image.';
+    } catch (err) {
+      const error = err as ApiError;
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to upload image.';
       dispatch({ type: 'OPERATION_FAILURE', payload: errorMessage });
       dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: { messageText: `Error uploading '${file.name}': ${errorMessage}`, type: 'error' } });
     }
@@ -277,7 +305,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     dispatch({ type: 'SET_TARGET_ELEMENT_ID', payload: targetId });
   };
 
-  const generateAndDownloadPPTX = async () => { /* ... existing code ... */ }; // Shortened for brevity
+  const generateAndDownloadPPTX = async () => { /* ... existing code ... */ };
 
   return (
     <AppContext.Provider value={{ ...state, startNewPoster, sendChatMessage, generateAndDownloadPPTX, updatePosterTheme, setCurrentTargetElementId, updateStyleOverrides, directUpdateElement, updateSectionImageUrls, uploadImageForSection }}>
@@ -286,7 +314,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 };
 
-// --- Custom Hook ---
 export const useAppContext = (): AppContextType => {
   const context = useContext(AppContext);
   if (context === undefined) {
