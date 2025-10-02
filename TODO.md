@@ -2,44 +2,39 @@
 
 This document tracks the development tasks for the Interactive Poster Generator project.
 
-## Phase 1: Architecture Refinement and Code Quality (Completed)
+## Phase 1 & 2: Architecture, Quality, and DX (Completed)
 
--   **[X] 1. Integrate Testing Framework:** Established a robust testing foundation for the backend.
--   **[X] 2. Refactor Complex Business Logic:** Migrated business logic to a dedicated service layer.
--   **[X] 3. Clean Up Schema Definitions:** Modernized and clarified all Pydantic data models.
--   **[X] 4. Fix Frontend Linting Issues:** Eliminated all critical linting errors in the React codebase.
+-   **[X]** All Phase 1 and 2 tasks related to refactoring, testing, and code quality have been successfully completed and committed.
 
-## Phase 2: Solidification and DX (Developer Experience) (Completed)
+## Phase 3: Architectural Transformation: Integrating 'presenton' (In Progress)
 
--   **[X] 1. Backend Unit Tests:** Wrote comprehensive unit tests for the new service layer.
--   **[X] 2. Harden System Dependencies:** Removed "magic strings" with enums and added dependency checks.
--   **[X] 3. Generate Static API Documentation:** Created a script to generate a static `openapi.json`.
--   **[X] 4. Frontend Testing Framework:** Successfully integrated Vitest into the frontend project.
+**Strategic Direction:** The project will pivot to use `presenton` as the core presentation generation engine. Our backend will be transformed into a **Backend for Frontend (BFF)**.
 
-## Phase 3: Architectural Transformation: Integrating 'presenton' (Next)
+**Implementation Plan:** We will perform a manual, "Docker-less" installation of `presenton` by incrementally installing and verifying each dependency.
 
-**Strategic Direction:** The project will pivot to use `presenton` (`https://github.com/presenton/presenton`) as the core presentation generation engine. Our current backend (`interactive_poster_backend`) will be transformed into a **Backend for Frontend (BFF)**. Its primary role will be to act as an intermediary between our specialized UI and the powerful, generalized `presenton` API.
-
--   **[ ] 1. Manual `presenton` Setup (Docker-less):**
-    -   **[ ] System Dependencies:** Install `python3.11`, `nodejs-20`, `npm`, `nginx`, `libreoffice`, `chromium`, and `ollama` using system package managers.
-    -   **[ ] Python Dependencies:** Install all Python packages listed in `Dockerfile.dev` using `pip`.
-    -   **[ ] Node.js Dependencies:** Navigate to `servers/nextjs` within the `presenton` codebase and run `npm install`.
-    -   **[ ] Nginx Configuration:** Copy the `nginx.conf` file to the system's Nginx configuration directory (e.g., `/etc/nginx/nginx.conf`).
-    -   **[ ] Service Activation:** Sequentially start all required services (Nginx, Ollama, FastAPI, MCP, Next.js) using the commands identified in `start.js`.
--   **[ ] 2. Refactor Backend to Act as BFF:**
-    -   [ ] Create a new service/client in our backend to communicate with the now locally running `presenton` API (at `http://localhost:5000`).
-    -   [ ] Modify `poster_service.py` to translate requests from our UI into API calls to `presenton`.
-    -   [ ] Remove our internal PPTX generation logic and the LibreOffice dependency.
--   **[ ] 3. Adapt Frontend UI:**
-    -   [ ] Update the frontend to handle any changes in the API responses from our new BFF.
-    -   [ ] Potentially expand the UI to expose some of `presenton`'s more advanced features.
+-   **[ ] 1. Setup `presenton` Source Code:**
+    -   [ ] Clone the `presenton` repository from GitHub.
+-   **[ ] 2. Incremental System Dependency Installation:**
+    -   [ ] Install `nginx`
+    -   [ ] Install `curl`
+    -   [ ] Install `libreoffice`
+    -   [ ] Install `fontconfig`
+    -   [ ] Install `chromium`
+    -   [ ] Install `nodejs` (Version 20)
+    -   [ ] Install `ollama`
+-   **[ ] 3. Incremental Language Dependency Installation:**
+    -   [ ] Install all Python packages from `Dockerfile.dev` via `pip`.
+    -   [ ] Install all Node.js packages by running `npm install` in the `servers/nextjs` directory.
+-   **[ ] 4. Staged Service Activation & BFF Refactoring:**
+    -   [ ] Configure and start `nginx`.
+    -   [ ] Sequentially start `ollama`, `fastapi`, `mcp_server`, and `nextjs`.
+    -   [ ] Once all `presenton` services are running locally, begin refactoring our backend to act as a BFF.
 
 ## Known Issues / Blockers
 
--   **[CRITICAL] Disk Space Limitation:**
-    -   **Symptom:** `docker pull` command fails with `no space left on device`.
-    -   **Impact:** This **blocks** the official, Docker-based setup of `presenton`. The current plan is to mitigate this by performing a manual, "Docker-less" installation.
--   **[ ] Frontend Verification (`Playwright`) Blocked:**
-    -   **Symptom:** Playwright tests consistently fail with a `TimeoutError`.
-    -   **Root Cause:** The backend server (`uvicorn`) fails to start correctly within the test environment.
-    -   **Next Step:** This issue is currently de-prioritized in favor of the strategic pivot to `presenton`.
+-   **[CRITICAL] Unstable Sandbox Environment:**
+    -   **Symptom:** Fundamental system commands (`git clone`, `apt-get`, `docker`) have failed with inconsistent errors (`IsADirectoryError`, `no space left on device`, `PermissionDenied`).
+    -   **Mitigation Strategy:** The current "Incremental Installation" plan for Phase 3 is designed to systematically work around or pinpoint the source of this instability. Each step will be small and verifiable.
+-   **[LOW] Frontend Verification (`Playwright`) Blocked:**
+    -   **Symptom:** Playwright tests fail with a `TimeoutError`.
+    -   **Root Cause:** Believed to be a symptom of the larger environmental instability. De-prioritized until Phase 3 is addressed.
